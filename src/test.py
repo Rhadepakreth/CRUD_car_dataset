@@ -1,7 +1,6 @@
 import pandas as pd
 from data_manager import CsvDataSource, CsvCarRepository, SQLiteCarRepository
 
-
 # Tests unitaires pour le projet de gestion de voitures
 # La logique de haut niveau dépend des abstractions (CarRepository), pas des implémentations concrètes.
 def main_app_logic(repository: CarRepository):
@@ -11,7 +10,7 @@ def main_app_logic(repository: CarRepository):
 
     print("\n--- Création d'une voiture ---")
     new_car = {
-        'name': 'SuperCar ModelX', 'year': 2024, 'selling_price': 90000,
+        'name': 'SuperCar ModelX', 'year': 2024, 'selling_price': 90000, 
         'km_driven': 100, 'fuel': 'Electric', 'seller_type': 'Dealer',
         'transmission': 'Automatic', 'owner': 'First Owner'
     }

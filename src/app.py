@@ -1,267 +1,223 @@
-from data_manager import CsvDataSource, CsvCarRepository, SQLiteCarRepository
+from flask import Flask, render_template, request, redirect, url_for, flash
+from data_manager import CsvDataSource, CsvCarRepository, SQLiteCarRepository, CarRepository # Assurez-vous que CarRepository est importé si utilisé comme type hint
+import pandas as pd # Ajouté pour la manipulation potentielle de DataFrame dans les routes
 
-# Initialiser le gestionnaire de données - Sera fait dans main()
-# data_manager = DataManager()
-global data_manager # Déclarer data_manager comme global pour y accéder dans les fonctions si nécessaire
+app = Flask(__name__)
+app.secret_key = "votre_cle_secrete_ici" # Important pour les messages flash
+
+# Variables globales pour le data_manager et le type de source
 data_manager = None
-global source_type_label
 source_type_label = "index" # Par défaut à index pour CSV
+# Champs requis pour la création d'une voiture, utile pour la validation de formulaire
+REQUIRED_FIELDS = ['name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
 
-def print_menu():
-    """Affiche le menu des options CRUD."""
-    global source_type_label
-    print("\n--- Menu CRUD Voitures ---")
-    print("1. Lister toutes les voitures")
-    print(f"2. Afficher une voiture (par {source_type_label})")
-    print("3. Ajouter une nouvelle voiture")
-    print(f"4. Mettre à jour une voiture (par {source_type_label})")
-    print(f"5. Supprimer une voiture (par {source_type_label})")
-    print("6. Rechercher un véhicule")
-    print("0. Quitter")
+# Les fonctions CLI comme print_menu et get_car_details_from_user ne sont plus utilisées directement par Flask.
+# La logique de get_car_details_from_user sera adaptée dans les routes POST.
 
-def get_car_details_from_user(is_update=False):
-    """Demande à l'utilisateur les détails d'une voiture."""
-    details = {}
-    print("\nVeuillez entrer les détails de la voiture:")
-    # Pour la mise à jour, certains champs peuvent être optionnels
-    # Pour la création, tous les champs sont requis (ou gérés avec des valeurs par défaut si nécessaire)
+@app.route('/')
+def index():
+    global data_manager, source_type_label
+    if not data_manager:
+        flash("La source de données n'est pas initialisée. Veuillez redémarrer l'application.", "error")
+        return redirect(url_for('configure_source')) # Rediriger vers une page de configuration si nécessaire
 
-    name = input("Nom (ex: Maruti Swift Dzire VDI): ")
-    if name or not is_update: details['name'] = name
+    cars_df = data_manager.get_all_cars()
+    
+    # Préparer les données pour l'affichage
+    # Assurer que 'id' est bien l'identifiant à utiliser pour les liens, que ce soit l'index (CSV) ou l'ID (SQLite)
+    if not cars_df.empty:
+        if source_type_label == "index": # CSV
+            # Pour CSV, l'index du DataFrame est l'ID que nous utilisons.
+            # Ajoutons-le comme une colonne pour un accès facile dans le template.
+            cars_df_processed = cars_df.reset_index().rename(columns={'index': 'display_id'})
+        else: # SQLite
+            # Pour SQLite, la colonne 'id' est l'ID.
+            cars_df_processed = cars_df.rename(columns={'id': 'display_id'})
+        cars_list = cars_df_processed.to_dict(orient='records')
+    else:
+        cars_list = []
+        
+    return render_template('index.html', cars=cars_list, source_type_label=source_type_label, all_columns=REQUIRED_FIELDS + (['display_id'] if source_type_label == 'ID' else []))
 
-    while True:
-        year_str = input("Année (ex: 2017): ")
-        if not year_str and is_update: break
-        try:
-            details['year'] = int(year_str)
-            break
-        except ValueError:
-            print("Année invalide. Veuillez entrer un nombre.")
-
-    while True:
-        price_str = input("Prix de vente (ex: 600000): ")
-        if not price_str and is_update: break
-        try:
-            details['selling_price'] = int(price_str)
-            break
-        except ValueError:
-            print("Prix invalide. Veuillez entrer un nombre.")
-
-    while True:
-        km_str = input("Kilomètres parcourus (ex: 46507): ")
-        if not km_str and is_update: break
-        try:
-            details['km_driven'] = int(km_str)
-            break
-        except ValueError:
-            print("Kilométrage invalide. Veuillez entrer un nombre.")
-
-    fuel = input("Carburant (Petrol, Diesel, CNG, LPG, Electric): ")
-    if fuel or not is_update: details['fuel'] = fuel
-
-    seller_type = input("Type de vendeur (Individual, Dealer, Trustmark Dealer): ")
-    if seller_type or not is_update: details['seller_type'] = seller_type
-
-    transmission = input("Transmission (Manual, Automatic): ")
-    if transmission or not is_update: details['transmission'] = transmission
-
-    owner = input("Propriétaire (First Owner, Second Owner, Third Owner, Fourth & Above Owner, Test Drive Car): ")
-    if owner or not is_update: details['owner'] = owner
-
-    return {k: v for k, v in details.items() if v} # Ne retourne que les champs remplis pour la MAJ
-
-def main():
-    """Fonction principale de l'application CLI."""
+@app.route('/car/<car_id_str>')
+def car_detail(car_id_str):
     global data_manager
-    global source_type_label
+    try:
+        car_id = int(car_id_str)
+        car = data_manager.get_car_by_id(car_id)
+        if car:
+            # Si c'est CSV, l'ID passé est l'index, qui n'est pas une colonne dans le dict 'car'
+            # Si c'est SQLite, 'id' est une clé dans le dict 'car'
+            display_id_in_car = car.get('id') if source_type_label == "ID" else car_id
+            return render_template('car_detail.html', car=car, car_id=display_id_in_car, source_type_label=source_type_label)
+        else:
+            flash(f"Voiture avec l'{source_type_label} {car_id} non trouvée.", "warning")
+            return redirect(url_for('index'))
+    except ValueError:
+        flash(f"'{source_type_label}' invalide.", "error")
+        return redirect(url_for('index'))
 
+@app.route('/add', methods=['GET', 'POST'])
+def add_car():
+    global data_manager
+    if request.method == 'POST':
+        new_car_data = {field: request.form.get(field) for field in REQUIRED_FIELDS}
+        
+        # Validation simple (vérifier si tous les champs requis sont remplis)
+        # Une validation plus robuste serait nécessaire pour une application en production
+        missing_fields = [field for field, value in new_car_data.items() if not value]
+        if missing_fields:
+            flash(f"Les champs suivants sont requis : {', '.join(missing_fields)}", "error")
+            return render_template('car_form.html', car=new_car_data, action="add", source_type_label=source_type_label, required_fields=REQUIRED_FIELDS)
+
+        # Conversion des types pour les champs numériques
+        try:
+            new_car_data['year'] = int(new_car_data['year'])
+            new_car_data['selling_price'] = int(new_car_data['selling_price'])
+            new_car_data['km_driven'] = int(new_car_data['km_driven'])
+        except ValueError:
+            flash("Année, Prix de vente et Kilomètres parcourus doivent être des nombres.", "error")
+            return render_template('car_form.html', car=new_car_data, action="add", source_type_label=source_type_label, required_fields=REQUIRED_FIELDS)
+
+        created_car = data_manager.create_car(new_car_data)
+        if created_car:
+            flash("Voiture ajoutée avec succès!", "success")
+        else:
+            flash("Erreur lors de l'ajout de la voiture.", "error")
+        return redirect(url_for('index'))
+    
+    # Pour GET request
+    return render_template('car_form.html', car={}, action="add", source_type_label=source_type_label, required_fields=REQUIRED_FIELDS)
+
+@app.route('/update/<car_id_str>', methods=['GET', 'POST'])
+def update_car(car_id_str):
+    global data_manager, source_type_label
+    try:
+        car_id = int(car_id_str)
+    except ValueError:
+        flash(f"'{source_type_label}' invalide.", "error")
+        return redirect(url_for('index'))
+
+    car_to_update = data_manager.get_car_by_id(car_id)
+    if not car_to_update:
+        flash(f"Voiture avec l'{source_type_label} {car_id} non trouvée.", "warning")
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        updated_car_data = {}
+        for field in REQUIRED_FIELDS:
+            value = request.form.get(field)
+            if value: # Seulement inclure les champs qui ont une valeur
+                updated_car_data[field] = value
+        
+        # Conversion des types pour les champs numériques si présents
+        try:
+            if 'year' in updated_car_data:
+                updated_car_data['year'] = int(updated_car_data['year'])
+            if 'selling_price' in updated_car_data:
+                updated_car_data['selling_price'] = int(updated_car_data['selling_price'])
+            if 'km_driven' in updated_car_data:
+                updated_car_data['km_driven'] = int(updated_car_data['km_driven'])
+        except ValueError:
+            flash("Année, Prix de vente et Kilomètres parcourus doivent être des nombres valides.", "error")
+            # Re-passer les données originales et les données soumises pour correction
+            form_data = car_to_update.copy()
+            form_data.update(request.form.to_dict()) # Surcharger avec les valeurs du formulaire
+            return render_template('car_form.html', car=form_data, car_id=car_id, action="update", source_type_label=source_type_label, required_fields=REQUIRED_FIELDS)
+
+        if not updated_car_data:
+            flash("Aucune donnée fournie pour la mise à jour.", "info")
+            return redirect(url_for('update_car', car_id_str=car_id_str))
+
+        result = data_manager.update_car(car_id, updated_car_data)
+        if result:
+            flash("Voiture mise à jour avec succès!", "success")
+        else:
+            flash("Erreur lors de la mise à jour de la voiture.", "error")
+        return redirect(url_for('index'))
+
+    # Pour GET request
+    return render_template('car_form.html', car=car_to_update, car_id=car_id, action="update", source_type_label=source_type_label, required_fields=REQUIRED_FIELDS)
+
+@app.route('/delete/<car_id_str>', methods=['POST']) # Changé en POST pour la sécurité
+def delete_car(car_id_str):
+    global data_manager, source_type_label
+    try:
+        car_id = int(car_id_str)
+        deleted_car = data_manager.delete_car(car_id)
+        if deleted_car:
+            flash(f"Voiture {source_type_label} {car_id} supprimée avec succès.", "success")
+        else:
+            flash(f"Erreur lors de la suppression de la voiture {source_type_label} {car_id} ou voiture non trouvée.", "error")
+    except ValueError:
+        flash(f"'{source_type_label}' invalide.", "error")
+    return redirect(url_for('index'))
+
+@app.route('/search', methods=['GET', 'POST'])
+def search_cars_route():
+    global data_manager
+    if request.method == 'POST':
+        search_attribute = request.form.get('attribute')
+        search_value = request.form.get('value')
+
+        if not search_attribute or not search_value:
+            flash("Veuillez spécifier un attribut et une valeur pour la recherche.", "warning")
+            return redirect(url_for('search_cars_route'))
+
+        results_df = data_manager.search_cars(search_attribute, search_value)
+        
+        if not results_df.empty:
+            if source_type_label == "index": # CSV
+                results_df_processed = results_df.reset_index().rename(columns={'index': 'display_id'})
+            else: # SQLite
+                results_df_processed = results_df.rename(columns={'id': 'display_id'})
+            search_results = results_df_processed.to_dict(orient='records')
+            flash(f"{len(search_results)} voiture(s) trouvée(s).", "info")
+        else:
+            search_results = []
+            flash("Aucune voiture ne correspond à vos critères de recherche.", "info")
+        
+        # Réutiliser index.html pour afficher les résultats ou créer un search_results.html dédié
+        return render_template('index.html', cars=search_results, source_type_label=source_type_label, is_search_results=True, all_columns=REQUIRED_FIELDS + (['display_id'] if source_type_label == 'ID' else []))
+
+    # Pour GET request, afficher le formulaire de recherche
+    # Obtenir les colonnes possibles pour la recherche
+    sample_cars_df = data_manager.get_all_cars()
+    if not sample_cars_df.empty:
+        possible_attributes = [col for col in sample_cars_df.columns if col != 'id' or source_type_label == "ID"]
+    else:
+        possible_attributes = REQUIRED_FIELDS # Fallback si la DB est vide
+        
+    return render_template('search_form.html', possible_attributes=possible_attributes)
+
+
+# Configuration initiale de la source de données (appelée avant de démarrer l'app)
+def configure_data_source():
+    global data_manager, source_type_label
     while True:
-        source_choice = input("Choisir la source de données (1: CSV, 2: SQLite, 0: Quitter): ").strip()
+        print("\n--- Configuration de la Source de Données pour l'Application Web ---")
+        source_choice = input("Choisir la source de données (1: CSV, 2: SQLite, 0: Quitter la configuration): ").strip()
         if source_choice == '1':
             csv_data_source = CsvDataSource()
             data_manager = CsvCarRepository(csv_data_source)
             source_type_label = "index"
-            print("Source de données sélectionnée: CSV")
+            print("Source de données pour l'application web sélectionnée: CSV")
             break
         elif source_choice == '2':
             data_manager = SQLiteCarRepository()
             source_type_label = "ID"
-            print("Source de données sélectionnée: SQLite")
-            # S'assurer que la table est créée si elle n'existe pas (déjà géré dans __init__ de SQLiteDataManager)
-            # data_manager._create_table_if_not_exists() # Appel explicite si nécessaire
+            print("Source de données pour l'application web sélectionnée: SQLite")
             break
         elif source_choice == '0':
-            print("Au revoir !")
-            return
+            print("Configuration annulée. L'application web ne démarrera pas sans source de données.")
+            data_manager = None # S'assurer que data_manager est None si l'utilisateur quitte
+            return False # Indiquer que la configuration a échoué ou a été annulée
         else:
             print("Choix de source invalide. Veuillez réessayer.")
-
-    while True:
-        print_menu()
-        # Afficher le nombre actuel de voitures pour aider l'utilisateur
-        all_cars_df = data_manager.get_all_cars()
-        if not all_cars_df.empty:
-            print(f"(Nombre actuel de voitures: {len(all_cars_df)})")
-        else:
-            print("(Aucune voiture dans la base de données pour le moment)")
-        choice = input("Entrez votre choix: ")
-
-        if choice == '1': # Lister toutes les voitures
-            print("\n--- Liste de toutes les voitures ---")
-            cars = data_manager.get_all_cars()
-            if not cars.empty:
-                print(cars.to_string())
-            else:
-                print("Aucune voiture dans la base de données.")
-
-        elif choice == '2': # Afficher une voiture par index
-            cars_df = data_manager.get_all_cars()
-            if cars_df.empty:
-                print("Aucune voiture à afficher.")
-            else:
-                try:
-                    if source_type_label == "ID":
-                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à afficher: "))
-                        car = data_manager.get_car_by_id(entity_id)
-                    else: # CSV utilise l'index
-                        index_max = len(cars_df) - 1
-                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à afficher (0-{index_max}): "))
-                        car = data_manager.get_car_by_id(entity_id)
-                    
-                    if car:
-                        print("\n--- Détails de la voiture ---")
-                        # Pour SQLite, l'ID est une colonne, pour CSV, c'est l'index du DataFrame
-                        if source_type_label == "ID" and 'id' in car:
-                            print(f"ID: {car['id']}")
-                        elif source_type_label == "index":
-                             print(f"Index: {entity_id}") # Afficher l'index utilisé pour la recherche CSV
-
-                        for key, value in car.items():
-                            if key == 'id' and source_type_label == "ID": continue # Déjà affiché
-                            print(f"{key.replace('_', ' ').capitalize()}: {value}")
-                    else:
-                        print(f"Aucune voiture trouvée à l'{source_type_label} {entity_id}.")
-                except ValueError:
-                    print(f"{source_type_label} invalide. Veuillez entrer un nombre.")
-
-        elif choice == '3': # Ajouter une nouvelle voiture
-            new_car_data = get_car_details_from_user()
-            # Vérifier si tous les champs nécessaires sont présents pour une création
-            required_fields = ['name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
-            if all(field in new_car_data for field in required_fields):
-                data_manager.create_car(new_car_data)
-            else:
-                print("Données incomplètes. Tous les champs sont requis pour ajouter une voiture.")
-
-        elif choice == '4': # Mettre à jour une voiture
-            cars_df = data_manager.get_all_cars()
-            if cars_df.empty:
-                print("Aucune voiture à mettre à jour.")
-            else:
-                try:
-                    if source_type_label == "ID":
-                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à mettre à jour: "))
-                        car_to_update = data_manager.get_car_by_id(entity_id)
-                    else: # CSV utilise l'index
-                        index_max = len(cars_df) - 1
-                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à mettre à jour (0-{index_max}): "))
-                        car_to_update = data_manager.get_car_by_id(entity_id)
-
-                    if car_to_update:
-                        print(f"\nMise à jour de la voiture à l'{source_type_label} {entity_id}:")
-                        if source_type_label == "ID" and 'id' in car_to_update:
-                            print(f"ID: {car_to_update['id']}")
-                        elif source_type_label == "index":
-                             print(f"Index: {entity_id}")
-                        for key, value in car_to_update.items():
-                            if key == 'id' and source_type_label == "ID": continue
-                            print(f"{key.replace('_', ' ').capitalize()}: {value}")
-                        
-                        updated_data = get_car_details_from_user(is_update=True)
-                        if updated_data: # Si l'utilisateur a fourni des données à mettre à jour
-                            if source_type_label == "ID":
-                                data_manager.update_car(entity_id, updated_data)
-                            else:
-                                data_manager.update_car(entity_id, updated_data) # CSV update_car prend aussi l'index
-                        else:
-                            print("Aucune modification fournie.")
-                    else:
-                        print(f"Aucune voiture trouvée à l'{source_type_label} {entity_id} pour la mise à jour.")
-                except ValueError:
-                    print(f"{source_type_label} invalide. Veuillez entrer un nombre.")
-
-        elif choice == '5': # Supprimer une voiture
-            cars_df = data_manager.get_all_cars()
-            if cars_df.empty:
-                print("Aucune voiture à supprimer.")
-            else:
-                try:
-                    if source_type_label == "ID":
-                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à supprimer: "))
-                        # Pour SQLite, delete_car attend un ID
-                        deleted_car = data_manager.delete_car(entity_id)
-                    else: # CSV utilise l'index
-                        index_max = len(cars_df) - 1
-                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à supprimer (0-{index_max}): "))
-                        deleted_car = data_manager.delete_car(entity_id)
-
-                    if deleted_car:
-                        print(f"Voiture à l'{source_type_label} {entity_id} supprimée.")
-                    else:
-                        # Le message d'erreur spécifique est généralement géré dans le DataManager
-                        # Mais on peut ajouter un message générique ici si delete_car retourne None sans imprimer
-                        print(f"Aucune voiture trouvée à l'{source_type_label} {entity_id} pour la suppression ou la suppression a échoué.")
-                except ValueError:
-                    print(f"{source_type_label} invalide. Veuillez entrer un nombre.")
-
-        elif choice == '6': # Rechercher un véhicule
-            print("\n--- Rechercher un véhicule ---")
-            # Définir les attributs de recherche possibles
-            # Pour CSV, les colonnes du DataFrame. Pour SQLite, les colonnes de la table.
-            # On peut obtenir les colonnes du DataFrame pour les deux cas après un get_all_cars()
-            # ou définir une liste fixe si on préfère.
-            all_cars_sample = data_manager.get_all_cars()
-            if all_cars_sample.empty:
-                print("Aucune voiture dans la base de données pour définir les critères de recherche.")
-            else:
-                # Exclure 'id' pour CSV car il n'est pas un attribut direct de recherche comme pour SQLite
-                # et source_type_label est déjà utilisé pour l'affichage/MAJ/suppression par ID/index.
-                # Pour SQLite, 'id' est un attribut valide.
-                possible_attributes = [col for col in all_cars_sample.columns if col != 'id' or source_type_label == "ID"]
-                if not possible_attributes:
-                    print("Impossible de déterminer les attributs de recherche.")
-                else:
-                    print("Choisissez un attribut pour la recherche:")
-                    for i, attr in enumerate(possible_attributes):
-                        print(f"{i + 1}. {attr.replace('_', ' ').capitalize()}")
-                    
-                    attr_choice_str = input("Votre choix d'attribut (numéro): ")
-                    try:
-                        attr_choice_idx = int(attr_choice_str) - 1
-                        if 0 <= attr_choice_idx < len(possible_attributes):
-                            search_attribute = possible_attributes[attr_choice_idx]
-                            search_value = input(f"Entrez la valeur à rechercher pour '{search_attribute.replace('_', ' ').capitalize()}': ")
-                            
-                            results_df = data_manager.search_cars(search_attribute, search_value)
-                            
-                            if not results_df.empty:
-                                print("\n--- Résultats de la recherche ---")
-                                print(results_df.to_string())
-                            else:
-                                print("Aucune voiture ne correspond à vos critères de recherche.")
-                        else:
-                            print("Choix d'attribut invalide.")
-                    except ValueError:
-                        print("Choix d'attribut invalide. Veuillez entrer un nombre.")
-
-        elif choice == '0': # Quitter
-            print("Au revoir !")
-            break
-
-        else:
-            print("Choix invalide. Veuillez réessayer.")
+    return True # Indiquer que la configuration est réussie
 
 if __name__ == '__main__':
-    # S'assurer que le fichier de données existe ou est créé s'il est vide
-    # data_manager.load_data() # Peut être appelé pour initialiser/vérifier le fichier au démarrage
-    main()
+    if configure_data_source(): # Demander à l'utilisateur de configurer la source de données
+        app.run(debug=True) # Lancer l'application Flask
+    else:
+        print("L'application web n'a pas pu démarrer car la source de données n'a pas été configurée.")

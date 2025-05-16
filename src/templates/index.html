@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if is_search_results %}
+        Résultats de la Recherche
+    {% else %}
+        Liste des Voitures
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>
+            {% if is_search_results %}
+                Résultats de la Recherche
+            {% else %}
+                Liste des Véhicules stockés
+            {% endif %}
+            <small class="text-muted"> (Source: {{ source_type_label }})</small>
+        </h1>
+        <a href="{{ url_for('add_car') }}" class="btn btn-success">Ajouter une Voiture</a>
+    </div>
+
+    {% if cars %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    {% if source_type_label == 'index' %}
+                        <th>Index (ID CSV)</th>
+                    {% else %}
+                        <th>ID SQLite</th>
+                    {% endif %}
+                    <th>Nom</th>
+                    <th>Année</th>
+                    <th>Prix de Vente</th>
+                    <th>Km Parcourus</th>
+                    <th>Carburant</th>
+                    <th>Type Vendeur</th>
+                    <th>Transmission</th>
+                    <th>Propriétaire</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for car in cars %}
+                    <tr>
+                        <td>{{ car.display_id }}</td>
+                        <td>{{ car.name }}</td>
+                        <td>{{ car.year }}</td>
+                        <td>{{ car.selling_price }}</td>
+                        <td>{{ car.km_driven }}</td>
+                        <td>{{ car.fuel }}</td>
+                        <td>{{ car.seller_type }}</td>
+                        <td>{{ car.transmission }}</td>
+                        <td>{{ car.owner }}</td>
+                        <td>
+                            <a href="{{ url_for('car_detail', car_id_str=car.display_id) }}" class="btn btn-info btn-sm">Voir</a>
+                            <a href="{{ url_for('update_car', car_id_str=car.display_id) }}" class="btn btn-warning btn-sm">Modifier</a>
+                            <form action="{{ url_for('delete_car', car_id_str=car.display_id) }}" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette voiture ?');">Supprimer</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Aucune voiture à afficher.</p>
+    {% endif %}
+    {% if is_search_results %}
+        <a href="{{ url_for('index') }}" class="btn btn-primary mt-3">Retour à la liste complète</a>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}{% if action == 'add' %}Ajouter{% else %}Modifier{% endif %} une Voiture{% endblock %}
+
+{% block content %}
+    <h1>{% if action == 'add' %}Ajouter une Nouvelle Voiture{% else %}Modifier la Voiture ({{ source_type_label }}: {{ car_id }}){% endif %}</h1>
+    
+    <form method="POST">
+        {% set fields_config = [
+            ('name', 'Nom', 'text', car.name, []),
+            ('year', 'Année', 'number', car.year, []),
+            ('selling_price', 'Prix de Vente', 'number', car.selling_price, []),
+            ('km_driven', 'Kilomètres Parcourus', 'number', car.km_driven, []),
+            ('fuel', 'Carburant', 'select', car.fuel, ['Petrol', 'Diesel', 'CNG', 'LPG', 'Electric']),
+            ('seller_type', 'Type de Vendeur', 'select', car.seller_type, ['Individual', 'Dealer', 'Trustmark Dealer']),
+            ('transmission', 'Transmission', 'select', car.transmission, ['Manual', 'Automatic']),
+            ('owner', 'Propriétaire', 'select', car.owner, ['First Owner', 'Second Owner', 'Third Owner', 'Fourth & Above Owner', 'Test Drive Car'])
+        ] %}
+
+        {% for name, label, type, current_value, options_list in fields_config %}
+            <div class="form-group">
+                <label for="{{ name }}">{{ label }}{% if name in required_fields and action == 'add' %}<span class="text-danger">*</span>{% endif %}</label>
+                {% if type == 'select' %}
+                    <select class="form-control" id="{{ name }}" name="{{ name }}" {% if name in required_fields and action == 'add' %}required{% endif %}>
+                        <option value="">-- Choisir {{ label }} --</option>
+                        {% for option_value in options_list %}
+                            <option value="{{ option_value }}" {% if option_value == current_value %}selected{% endif %}>{{ option_value }}</option>
+                        {% endfor %}
+                    </select>
+                {% else %}
+                    <input type="{{ type }}" class="form-control" id="{{ name }}" name="{{ name }}" value="{{ current_value if current_value is not none else '' }}" {% if name in required_fields and action == 'add' %}required{% endif %}>
+                {% endif %}
+            </div>
+        {% endfor %}
+        
+        <button type="submit" class="btn btn-primary">{% if action == 'add' %}Ajouter{% else %}Mettre à jour{% endif %}</button>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Annuler</a>
+    </form>
+    {% if action == 'add' %}
+    <p class="mt-2"><small><span class="text-danger">*</span> Champs obligatoires</small></p>
+    {% endif %}
+{% endblock %}

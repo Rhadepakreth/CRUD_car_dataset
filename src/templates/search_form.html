@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Rechercher des Voitures{% endblock %}
+
+{% block content %}
+    <h1>Rechercher des Voitures</h1>
+    <form method="POST" action="{{ url_for('search_cars_route') }}">
+        <div class="form-group">
+            <label for="attribute">Rechercher par Attribut :</label>
+            <select class="form-control" id="attribute" name="attribute">
+                {% for attr in possible_attributes %}
+                    <option value="{{ attr }}">{{ attr.replace('_', ' ').capitalize() }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="value">Valeur :</label>
+            <input type="text" class="form-control" id="value" name="value" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Rechercher</button>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Annuler</a>
+    </form>
+{% endblock %}

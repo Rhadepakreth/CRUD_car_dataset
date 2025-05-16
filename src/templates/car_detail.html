@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Détails de la Voiture{% endblock %}
+
+{% block content %}
+    <h1>Détails de la Voiture <small class="text-muted">({{ source_type_label }}: {{ car_id }})</small></h1>
+    {% if car %}
+        <table class="table">
+            <tbody>
+                {% for key, value in car.items() %}
+                    <tr>
+                        <th>{{ key.replace('_', ' ').capitalize() }}</th>
+                        <td>{{ value }}</td>
+                    </tr>
+                {% endfor %}
+                 {% if source_type_label == 'index' %}
+                 <tr>
+                    <th>Index (ID CSV)</th>
+                    <td>{{ car_id }}</td>
+                 </tr>
+                 {% endif %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Voiture non trouvée.</p>
+    {% endif %}
+    <a href="{{ url_for('index') }}" class="btn btn-primary">Retour à la liste</a>
+    <a href="{{ url_for('update_car', car_id_str=car_id) }}" class="btn btn-warning">Modifier</a>
+{% endblock %}
