@@ -88,6 +88,41 @@ class DataManager:
             # print(f"Aucune voiture trouvée à l'index {index} pour la suppression.")
             return None
 
+    def search_cars(self, attribute, value):
+        """Recherche des voitures en fonction d'un attribut et d'une valeur."""
+        df = self.load_data()
+        if df.empty:
+            print("La source de données est vide.")
+            return pd.DataFrame()
+
+        if attribute not in df.columns:
+            print(f"L'attribut '{attribute}' n'existe pas.")
+            return pd.DataFrame()
+
+        try:
+            # Tenter de convertir la valeur de recherche au type de la colonne si possible
+            # Cela est important pour les comparaisons numériques
+            if pd.api.types.is_numeric_dtype(df[attribute]):
+                value_to_search = type(df[attribute].dropna().iloc[0])(value) if not df[attribute].dropna().empty else value
+            elif pd.api.types.is_string_dtype(df[attribute]):
+                value_to_search = str(value)
+            else:
+                value_to_search = value # Pour d'autres types, utiliser la valeur telle quelle
+
+            # Pour les chaînes de caractères, effectuer une recherche insensible à la casse et partielle (contient)
+            if pd.api.types.is_string_dtype(df[attribute]):
+                result_df = df[df[attribute].astype(str).str.contains(value_to_search, case=False, na=False)]
+            else:
+                result_df = df[df[attribute] == value_to_search]
+            
+            return result_df
+        except ValueError:
+            print(f"La valeur '{value}' n'est pas compatible avec le type de l'attribut '{attribute}'.")
+            return pd.DataFrame()
+        except Exception as e:
+            print(f"Une erreur est survenue lors de la recherche: {e}")
+            return pd.DataFrame()
+
 
 class SQLiteDataManager:
     def __init__(self, db_file_path=None):
@@ -141,6 +176,49 @@ class SQLiteDataManager:
         finally:
             conn.close()
 
+    def search_cars(self, attribute, value):
+        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
+        # et pour s'assurer que la recherche est possible.
+        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
+        # plus 'id' qui est la clé primaire.
+        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
+        if attribute not in valid_columns:
+            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
+            return pd.DataFrame() # Retourner un DataFrame vide
+
+        try:
+            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
+            # Pour les nombres, une comparaison directe est nécessaire.
+            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
+            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
+            search_value = f"%{value}%" # Recherche partielle pour les chaînes
+
+            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
+            # Note: Cela suppose que vous connaissez les types de vos colonnes.
+            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
+            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
+                try:
+                    numeric_value = int(value) # ou float(value) si applicable
+                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
+                    search_value = numeric_value
+                except ValueError:
+                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
+                    return pd.DataFrame()
+            
+            cursor.execute(query, (search_value,))
+            cars = cursor.fetchall()
+            cars_list = [dict(row) for row in cars]
+            return pd.DataFrame(cars_list)
+        except sqlite3.Error as e:
+            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
+            return pd.DataFrame()
+        finally:
+            conn.close()
+
     def get_all_cars(self):
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -156,6 +234,49 @@ class SQLiteDataManager:
         finally:
             conn.close()
 
+    def search_cars(self, attribute, value):
+        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
+        # et pour s'assurer que la recherche est possible.
+        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
+        # plus 'id' qui est la clé primaire.
+        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
+        if attribute not in valid_columns:
+            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
+            return pd.DataFrame() # Retourner un DataFrame vide
+
+        try:
+            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
+            # Pour les nombres, une comparaison directe est nécessaire.
+            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
+            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
+            search_value = f"%{value}%" # Recherche partielle pour les chaînes
+
+            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
+            # Note: Cela suppose que vous connaissez les types de vos colonnes.
+            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
+            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
+                try:
+                    numeric_value = int(value) # ou float(value) si applicable
+                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
+                    search_value = numeric_value
+                except ValueError:
+                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
+                    return pd.DataFrame()
+            
+            cursor.execute(query, (search_value,))
+            cars = cursor.fetchall()
+            cars_list = [dict(row) for row in cars]
+            return pd.DataFrame(cars_list)
+        except sqlite3.Error as e:
+            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
+            return pd.DataFrame()
+        finally:
+            conn.close()
+
     def get_car_by_id(self, car_id):
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -168,6 +289,49 @@ class SQLiteDataManager:
         except sqlite3.Error as e:
             print(f"Erreur SQLite lors de la récupération de la voiture ID {car_id}: {e}")
             return None
+        finally:
+            conn.close()
+
+    def search_cars(self, attribute, value):
+        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
+        # et pour s'assurer que la recherche est possible.
+        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
+        # plus 'id' qui est la clé primaire.
+        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
+        if attribute not in valid_columns:
+            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
+            return pd.DataFrame() # Retourner un DataFrame vide
+
+        try:
+            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
+            # Pour les nombres, une comparaison directe est nécessaire.
+            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
+            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
+            search_value = f"%{value}%" # Recherche partielle pour les chaînes
+
+            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
+            # Note: Cela suppose que vous connaissez les types de vos colonnes.
+            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
+            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
+                try:
+                    numeric_value = int(value) # ou float(value) si applicable
+                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
+                    search_value = numeric_value
+                except ValueError:
+                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
+                    return pd.DataFrame()
+            
+            cursor.execute(query, (search_value,))
+            cars = cursor.fetchall()
+            cars_list = [dict(row) for row in cars]
+            return pd.DataFrame(cars_list)
+        except sqlite3.Error as e:
+            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
+            return pd.DataFrame()
         finally:
             conn.close()
 
@@ -214,6 +378,49 @@ class SQLiteDataManager:
         finally:
             conn.close()
 
+    def search_cars(self, attribute, value):
+        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
+        # et pour s'assurer que la recherche est possible.
+        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
+        # plus 'id' qui est la clé primaire.
+        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
+        if attribute not in valid_columns:
+            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
+            return pd.DataFrame() # Retourner un DataFrame vide
+
+        try:
+            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
+            # Pour les nombres, une comparaison directe est nécessaire.
+            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
+            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
+            search_value = f"%{value}%" # Recherche partielle pour les chaînes
+
+            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
+            # Note: Cela suppose que vous connaissez les types de vos colonnes.
+            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
+            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
+                try:
+                    numeric_value = int(value) # ou float(value) si applicable
+                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
+                    search_value = numeric_value
+                except ValueError:
+                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
+                    return pd.DataFrame()
+            
+            cursor.execute(query, (search_value,))
+            cars = cursor.fetchall()
+            cars_list = [dict(row) for row in cars]
+            return pd.DataFrame(cars_list)
+        except sqlite3.Error as e:
+            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
+            return pd.DataFrame()
+        finally:
+            conn.close()
+
     def delete_car(self, car_id):
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -233,6 +440,49 @@ class SQLiteDataManager:
         except sqlite3.Error as e:
             print(f"Erreur SQLite lors de la suppression de la voiture ID {car_id}: {e}")
             return None
+        finally:
+            conn.close()
+
+    def search_cars(self, attribute, value):
+        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
+        # et pour s'assurer que la recherche est possible.
+        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
+        # plus 'id' qui est la clé primaire.
+        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
+        if attribute not in valid_columns:
+            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
+            return pd.DataFrame() # Retourner un DataFrame vide
+
+        try:
+            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
+            # Pour les nombres, une comparaison directe est nécessaire.
+            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
+            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
+            search_value = f"%{value}%" # Recherche partielle pour les chaînes
+
+            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
+            # Note: Cela suppose que vous connaissez les types de vos colonnes.
+            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
+            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
+                try:
+                    numeric_value = int(value) # ou float(value) si applicable
+                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
+                    search_value = numeric_value
+                except ValueError:
+                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
+                    return pd.DataFrame()
+            
+            cursor.execute(query, (search_value,))
+            cars = cursor.fetchall()
+            cars_list = [dict(row) for row in cars]
+            return pd.DataFrame(cars_list)
+        except sqlite3.Error as e:
+            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
+            return pd.DataFrame()
         finally:
             conn.close()
 

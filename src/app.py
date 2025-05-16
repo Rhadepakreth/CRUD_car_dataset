@@ -16,6 +16,7 @@ def print_menu():
     print("3. Ajouter une nouvelle voiture")
     print(f"4. Mettre à jour une voiture (par {source_type_label})")
     print(f"5. Supprimer une voiture (par {source_type_label})")
+    print("6. Rechercher un véhicule")
     print("0. Quitter")
 
 def get_car_details_from_user(is_update=False):
@@ -211,6 +212,46 @@ def main():
                         print(f"Aucune voiture trouvée à l'{source_type_label} {entity_id} pour la suppression ou la suppression a échoué.")
                 except ValueError:
                     print(f"{source_type_label} invalide. Veuillez entrer un nombre.")
+
+        elif choice == '6': # Rechercher un véhicule
+            print("\n--- Rechercher un véhicule ---")
+            # Définir les attributs de recherche possibles
+            # Pour CSV, les colonnes du DataFrame. Pour SQLite, les colonnes de la table.
+            # On peut obtenir les colonnes du DataFrame pour les deux cas après un get_all_cars()
+            # ou définir une liste fixe si on préfère.
+            all_cars_sample = data_manager.get_all_cars()
+            if all_cars_sample.empty:
+                print("Aucune voiture dans la base de données pour définir les critères de recherche.")
+            else:
+                # Exclure 'id' pour CSV car il n'est pas un attribut direct de recherche comme pour SQLite
+                # et source_type_label est déjà utilisé pour l'affichage/MAJ/suppression par ID/index.
+                # Pour SQLite, 'id' est un attribut valide.
+                possible_attributes = [col for col in all_cars_sample.columns if col != 'id' or source_type_label == "ID"]
+                if not possible_attributes:
+                    print("Impossible de déterminer les attributs de recherche.")
+                else:
+                    print("Choisissez un attribut pour la recherche:")
+                    for i, attr in enumerate(possible_attributes):
+                        print(f"{i + 1}. {attr.replace('_', ' ').capitalize()}")
+                    
+                    attr_choice_str = input("Votre choix d'attribut (numéro): ")
+                    try:
+                        attr_choice_idx = int(attr_choice_str) - 1
+                        if 0 <= attr_choice_idx < len(possible_attributes):
+                            search_attribute = possible_attributes[attr_choice_idx]
+                            search_value = input(f"Entrez la valeur à rechercher pour '{search_attribute.replace('_', ' ').capitalize()}': ")
+                            
+                            results_df = data_manager.search_cars(search_attribute, search_value)
+                            
+                            if not results_df.empty:
+                                print("\n--- Résultats de la recherche ---")
+                                print(results_df.to_string())
+                            else:
+                                print("Aucune voiture ne correspond à vos critères de recherche.")
+                        else:
+                            print("Choix d'attribut invalide.")
+                    except ValueError:
+                        print("Choix d'attribut invalide. Veuillez entrer un nombre.")
 
         elif choice == '0': # Quitter
             print("Au revoir !")
