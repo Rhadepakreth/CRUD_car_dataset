@@ -1,142 +1,177 @@
 import pandas as pd
 import os
 import sqlite3
+from abc import ABC, abstractmethod
 
-class DataManager:
-    def __init__(self, data_file_path=None):
-        if data_file_path is None:
-            # Construire un chemin absolu vers le fichier de données par défaut
-            self.data_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'car_dataset.csv'))
+# --- Principles SOLID --- #
+
+# Interface Segregation Principle (ISP) & Single Responsibility Principle (SRP)
+# DataSource: Responsable uniquement du chargement et de la sauvegarde des données brutes.
+class DataSource(ABC):
+    @abstractmethod
+    def load_data(self):
+        """Charge les données depuis la source."""
+        pass
+
+    @abstractmethod
+    def save_data(self, data):
+        """Sauvegarde les données dans la source."""
+        pass
+
+# CarRepository: Responsable des opérations CRUD spécifiques aux voitures.
+class CarRepository(ABC):
+    @abstractmethod
+    def create_car(self, new_car_data):
+        pass
+
+    @abstractmethod
+    def get_all_cars(self):
+        pass
+
+    @abstractmethod
+    def get_car_by_id(self, car_id):
+        # Pour CSV, l'ID sera l'index. Pour SQLite, ce sera la clé primaire.
+        pass
+
+    @abstractmethod
+    def update_car(self, car_id, updated_car_data):
+        pass
+
+    @abstractmethod
+    def delete_car(self, car_id):
+        pass
+
+    @abstractmethod
+    def search_cars(self, attribute, value):
+        pass
+
+
+# --- CSV Implementation --- #
+
+# Single Responsibility Principle (SRP)
+# CsvDataSource: Gère spécifiquement la lecture/écriture des fichiers CSV.
+class CsvDataSource(DataSource):
+    def __init__(self, file_path=None):
+        if file_path is None:
+            self.file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'car_dataset.csv'))
         else:
-            self.data_file_path = data_file_path
+            self.file_path = file_path
+        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
 
     def load_data(self):
-        """Charge les données depuis le fichier CSV."""
         try:
-            df = pd.read_csv(self.data_file_path)
-            return df
+            return pd.read_csv(self.file_path)
         except FileNotFoundError:
-            print(f"Erreur: Le fichier {self.data_file_path} n'a pas été trouvé.")
-            return pd.DataFrame() # Retourne un DataFrame vide en cas d'erreur
+            print(f"Erreur: Le fichier {self.file_path} n'a pas été trouvé.")
+            return pd.DataFrame()
         except Exception as e:
-            print(f"Erreur lors du chargement des données: {e}")
+            print(f"Erreur lors du chargement des données CSV: {e}")
             return pd.DataFrame()
 
     def save_data(self, df):
-        """Sauvegarde les données dans le fichier CSV."""
         try:
-            df.to_csv(self.data_file_path, index=False)
-            print("Données sauvegardées avec succès.")
+            df.to_csv(self.file_path, index=False)
+            print("Données CSV sauvegardées avec succès.")
         except Exception as e:
-            print(f"Erreur lors de la sauvegarde des données: {e}")
+            print(f"Erreur lors de la sauvegarde des données CSV: {e}")
+
+# Liskov Substitution Principle (LSP) & Dependency Inversion Principle (DIP)
+# CsvCarRepository dépend de l'abstraction DataSource, pas d'une implémentation concrète.
+class CsvCarRepository(CarRepository):
+    def __init__(self, data_source: DataSource):
+        self.data_source = data_source
 
     def create_car(self, new_car_data):
-        """Ajoute une nouvelle voiture au dataset."""
-        df = self.load_data()
+        df = self.data_source.load_data()
         new_car_df = pd.DataFrame([new_car_data])
-        # Utiliser pd.concat pour ajouter la nouvelle voiture
         df = pd.concat([df, new_car_df], ignore_index=True)
-        self.save_data(df)
-        print("Nouvelle voiture ajoutée.")
-        # Retourner la dernière ligne ajoutée (la nouvelle voiture)
+        self.data_source.save_data(df)
+        print("Nouvelle voiture ajoutée au CSV.")
         if not df.empty:
             return df.iloc[-1].to_dict()
         return None
 
     def get_all_cars(self):
-        """Récupère toutes les voitures du dataset."""
-        return self.load_data()
+        return self.data_source.load_data()
 
-    def get_car_by_index(self, index):
-        """Récupère une voiture par son index."""
-        df = self.load_data()
+    def get_car_by_id(self, index): # Pour CSV, l'ID est l'index
+        df = self.data_source.load_data()
         if not df.empty and 0 <= index < len(df):
             return df.iloc[index].to_dict()
-        else:
-            # Le message d'erreur est géré par l'appelant ou ici si nécessaire
-            # print(f"Aucune voiture trouvée à l'index {index}.") 
-            return None
+        return None
 
-    def update_car(self, index, updated_car_data):
-        """Met à jour les informations d'une voiture existante par son index."""
-        df = self.load_data()
+    def update_car(self, index, updated_car_data): # Pour CSV, l'ID est l'index
+        df = self.data_source.load_data()
         if not df.empty and 0 <= index < len(df):
             for key, value in updated_car_data.items():
                 if key in df.columns:
                     df.loc[index, key] = value
                 else:
-                    print(f"Attention: La colonne '{key}' n'existe pas et n'a pas été mise à jour.")
-            self.save_data(df)
-            print(f"Voiture à l'index {index} mise à jour.")
+                    print(f"Attention: La colonne CSV '{key}' n'existe pas et n'a pas été mise à jour.")
+            self.data_source.save_data(df)
+            print(f"Voiture à l'index CSV {index} mise à jour.")
             return df.iloc[index].to_dict()
-        else:
-            # Le message d'erreur est géré par l'appelant ou ici si nécessaire
-            # print(f"Aucune voiture trouvée à l'index {index} pour la mise à jour.")
-            return None
+        return None
 
-    def delete_car(self, index):
-        """Supprime une voiture du dataset par son index."""
-        df = self.load_data()
+    def delete_car(self, index): # Pour CSV, l'ID est l'index
+        df = self.data_source.load_data()
         if not df.empty and 0 <= index < len(df):
             car_deleted = df.iloc[index].to_dict()
             df = df.drop(index).reset_index(drop=True)
-            self.save_data(df)
-            print(f"Voiture à l'index {index} supprimée.")
+            self.data_source.save_data(df)
+            print(f"Voiture à l'index CSV {index} supprimée.")
             return car_deleted
-        else:
-            # Le message d'erreur est géré par l'appelant ou ici si nécessaire
-            # print(f"Aucune voiture trouvée à l'index {index} pour la suppression.")
-            return None
+        return None
 
     def search_cars(self, attribute, value):
-        """Recherche des voitures en fonction d'un attribut et d'une valeur."""
-        df = self.load_data()
+        df = self.data_source.load_data()
         if df.empty:
-            print("La source de données est vide.")
+            print("La source de données CSV est vide.")
             return pd.DataFrame()
 
         if attribute not in df.columns:
-            print(f"L'attribut '{attribute}' n'existe pas.")
+            print(f"L'attribut CSV '{attribute}' n'existe pas.")
             return pd.DataFrame()
 
         try:
-            # Tenter de convertir la valeur de recherche au type de la colonne si possible
-            # Cela est important pour les comparaisons numériques
             if pd.api.types.is_numeric_dtype(df[attribute]):
                 value_to_search = type(df[attribute].dropna().iloc[0])(value) if not df[attribute].dropna().empty else value
             elif pd.api.types.is_string_dtype(df[attribute]):
                 value_to_search = str(value)
             else:
-                value_to_search = value # Pour d'autres types, utiliser la valeur telle quelle
+                value_to_search = value
 
-            # Pour les chaînes de caractères, effectuer une recherche insensible à la casse et partielle (contient)
             if pd.api.types.is_string_dtype(df[attribute]):
                 result_df = df[df[attribute].astype(str).str.contains(value_to_search, case=False, na=False)]
             else:
                 result_df = df[df[attribute] == value_to_search]
-            
             return result_df
         except ValueError:
-            print(f"La valeur '{value}' n'est pas compatible avec le type de l'attribut '{attribute}'.")
+            print(f"La valeur '{value}' n'est pas compatible avec le type de l'attribut CSV '{attribute}'.")
             return pd.DataFrame()
         except Exception as e:
-            print(f"Une erreur est survenue lors de la recherche: {e}")
+            print(f"Une erreur est survenue lors de la recherche CSV: {e}")
             return pd.DataFrame()
 
 
-class SQLiteDataManager:
+# --- SQLite Implementation --- #
+
+# SQLiteDataManager (sera adapté pour devenir SQLiteCarRepository)
+# Il gère déjà sa propre connexion et la création de table (SRP pour la configuration DB)
+# Open/Closed Principle (OCP): On pourrait étendre avec d'autres types de DB sans modifier CarRepository.
+
+class SQLiteCarRepository(CarRepository):
     def __init__(self, db_file_path=None):
         if db_file_path is None:
             self.db_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'cars.db'))
         else:
             self.db_file_path = db_file_path
-        # Créer le dossier 'data' s'il n'existe pas
         os.makedirs(os.path.dirname(self.db_file_path), exist_ok=True)
         self._create_table_if_not_exists()
 
     def _get_connection(self):
         conn = sqlite3.connect(self.db_file_path)
-        conn.row_factory = sqlite3.Row  # Pour accéder aux colonnes par nom
+        conn.row_factory = sqlite3.Row
         return conn
 
     def _create_table_if_not_exists(self):
@@ -162,60 +197,23 @@ class SQLiteDataManager:
         conn = self._get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute('''
-                INSERT INTO cars (name, year, selling_price, km_driven, fuel, seller_type, transmission, owner)
-                VALUES (:name, :year, :selling_price, :km_driven, :fuel, :seller_type, :transmission, :owner)
-            ''', new_car_data)
+            # S'assurer que toutes les clés attendues sont présentes, avec des valeurs par défaut si nécessaire
+            # pour éviter les erreurs si new_car_data ne les contient pas toutes.
+            # Ceci est un exemple, adaptez selon les colonnes NOT NULL et les valeurs par défaut souhaitées.
+            cols = ['name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
+            car_data_for_db = {col: new_car_data.get(col) for col in cols}
+            
+            cursor.execute(f'''
+                INSERT INTO cars ({', '.join(cols)})
+                VALUES (:{', :'.join(cols)})
+            ''', car_data_for_db)
             conn.commit()
             car_id = cursor.lastrowid
-            print(f"Nouvelle voiture ajoutée avec l'ID {car_id}.")
+            print(f"Nouvelle voiture ajoutée à SQLite avec l'ID {car_id}.")
             return self.get_car_by_id(car_id)
         except sqlite3.Error as e:
             print(f"Erreur SQLite lors de la création de la voiture: {e}")
             return None
-        finally:
-            conn.close()
-
-    def search_cars(self, attribute, value):
-        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
-        # et pour s'assurer que la recherche est possible.
-        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
-        # plus 'id' qui est la clé primaire.
-        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
-        if attribute not in valid_columns:
-            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
-            return pd.DataFrame() # Retourner un DataFrame vide
-
-        try:
-            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
-            # Pour les nombres, une comparaison directe est nécessaire.
-            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
-            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
-            search_value = f"%{value}%" # Recherche partielle pour les chaînes
-
-            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
-            # Note: Cela suppose que vous connaissez les types de vos colonnes.
-            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
-            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
-                try:
-                    numeric_value = int(value) # ou float(value) si applicable
-                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
-                    search_value = numeric_value
-                except ValueError:
-                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
-                    return pd.DataFrame()
-            
-            cursor.execute(query, (search_value,))
-            cars = cursor.fetchall()
-            cars_list = [dict(row) for row in cars]
-            return pd.DataFrame(cars_list)
-        except sqlite3.Error as e:
-            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
-            return pd.DataFrame()
         finally:
             conn.close()
 
@@ -225,54 +223,10 @@ class SQLiteDataManager:
         try:
             cursor.execute("SELECT * FROM cars")
             cars = cursor.fetchall()
-            # Convertir les objets Row en une liste de dictionnaires
-            cars_list = [dict(row) for row in cars]
-            return pd.DataFrame(cars_list) # Retourner un DataFrame pour la cohérence
-        except sqlite3.Error as e:
-            print(f"Erreur SQLite lors de la récupération de toutes les voitures: {e}")
-            return pd.DataFrame()  # Retourne un DataFrame vide en cas d'erreur
-        finally:
-            conn.close()
-
-    def search_cars(self, attribute, value):
-        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
-        # et pour s'assurer que la recherche est possible.
-        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
-        # plus 'id' qui est la clé primaire.
-        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
-        if attribute not in valid_columns:
-            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
-            return pd.DataFrame() # Retourner un DataFrame vide
-
-        try:
-            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
-            # Pour les nombres, une comparaison directe est nécessaire.
-            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
-            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
-            search_value = f"%{value}%" # Recherche partielle pour les chaînes
-
-            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
-            # Note: Cela suppose que vous connaissez les types de vos colonnes.
-            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
-            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
-                try:
-                    numeric_value = int(value) # ou float(value) si applicable
-                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
-                    search_value = numeric_value
-                except ValueError:
-                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
-                    return pd.DataFrame()
-            
-            cursor.execute(query, (search_value,))
-            cars = cursor.fetchall()
             cars_list = [dict(row) for row in cars]
             return pd.DataFrame(cars_list)
         except sqlite3.Error as e:
-            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
+            print(f"Erreur SQLite lors de la récupération de toutes les voitures: {e}")
             return pd.DataFrame()
         finally:
             conn.close()
@@ -292,70 +246,25 @@ class SQLiteDataManager:
         finally:
             conn.close()
 
-    def search_cars(self, attribute, value):
-        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
-        # et pour s'assurer que la recherche est possible.
-        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
-        # plus 'id' qui est la clé primaire.
-        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
-        if attribute not in valid_columns:
-            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
-            return pd.DataFrame() # Retourner un DataFrame vide
-
-        try:
-            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
-            # Pour les nombres, une comparaison directe est nécessaire.
-            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
-            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
-            search_value = f"%{value}%" # Recherche partielle pour les chaînes
-
-            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
-            # Note: Cela suppose que vous connaissez les types de vos colonnes.
-            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
-            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
-                try:
-                    numeric_value = int(value) # ou float(value) si applicable
-                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
-                    search_value = numeric_value
-                except ValueError:
-                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
-                    return pd.DataFrame()
-            
-            cursor.execute(query, (search_value,))
-            cars = cursor.fetchall()
-            cars_list = [dict(row) for row in cars]
-            return pd.DataFrame(cars_list)
-        except sqlite3.Error as e:
-            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
-            return pd.DataFrame()
-        finally:
-            conn.close()
-
     def update_car(self, car_id, updated_car_data):
         conn = self._get_connection()
         cursor = conn.cursor()
         try:
-            # Vérifier d'abord si la voiture existe
             if self.get_car_by_id(car_id) is None:
-                print(f"Aucune voiture trouvée avec l'ID {car_id} pour la mise à jour.")
+                print(f"Aucune voiture trouvée avec l'ID SQLite {car_id} pour la mise à jour.")
                 return None
 
             set_clause_parts = []
             values = []
+            valid_columns = ['name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
             for key, value in updated_car_data.items():
-                # Assurez-vous que la clé est une colonne valide pour éviter les injections SQL
-                # et qu'elle n'est pas 'id'
-                if key in ['name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']:
+                if key in valid_columns:
                     set_clause_parts.append(f"{key} = ?")
                     values.append(value)
             
             if not set_clause_parts:
-                print("Aucune donnée valide fournie pour la mise à jour.")
-                return self.get_car_by_id(car_id) # Retourner l'original si rien n'est changé
+                print("Aucune donnée SQLite valide fournie pour la mise à jour.") 
+                return self.get_car_by_id(car_id)
 
             set_clause = ", ".join(set_clause_parts)
             query = f"UPDATE cars SET {set_clause} WHERE id = ?"
@@ -365,59 +274,11 @@ class SQLiteDataManager:
             conn.commit()
             
             if cursor.rowcount > 0:
-                print(f"Voiture ID {car_id} mise à jour.")
-                return self.get_car_by_id(car_id)
-            else:
-                # Ce cas peut arriver si les données fournies sont identiques aux données existantes
-                # ou si l'ID n'a pas été trouvé (déjà géré ci-dessus, mais double sécurité)
-                print(f"Aucune voiture trouvée avec l'ID {car_id} pour la mise à jour, ou aucune donnée n'a changé.")
-                return self.get_car_by_id(car_id) # Retourner l'état actuel
+                print(f"Voiture ID SQLite {car_id} mise à jour.")
+            return self.get_car_by_id(car_id)
         except sqlite3.Error as e:
             print(f"Erreur SQLite lors de la mise à jour de la voiture ID {car_id}: {e}")
             return None
-        finally:
-            conn.close()
-
-    def search_cars(self, attribute, value):
-        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
-        # et pour s'assurer que la recherche est possible.
-        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
-        # plus 'id' qui est la clé primaire.
-        valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
-        if attribute not in valid_columns:
-            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
-            return pd.DataFrame() # Retourner un DataFrame vide
-
-        try:
-            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
-            # Pour les nombres, une comparaison directe est nécessaire.
-            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
-            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
-            search_value = f"%{value}%" # Recherche partielle pour les chaînes
-
-            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
-            # Note: Cela suppose que vous connaissez les types de vos colonnes.
-            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
-            if attribute in ['year', 'selling_price', 'km_driven', 'id']:
-                try:
-                    numeric_value = int(value) # ou float(value) si applicable
-                    query = f"SELECT * FROM cars WHERE {attribute} = ?"
-                    search_value = numeric_value
-                except ValueError:
-                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
-                    return pd.DataFrame()
-            
-            cursor.execute(query, (search_value,))
-            cars = cursor.fetchall()
-            cars_list = [dict(row) for row in cars]
-            return pd.DataFrame(cars_list)
-        except sqlite3.Error as e:
-            print(f"Erreur SQLite lors de la recherche des voitures: {e}")
-            return pd.DataFrame()
         finally:
             conn.close()
 
@@ -427,15 +288,14 @@ class SQLiteDataManager:
         try:
             car_to_delete = self.get_car_by_id(car_id)
             if not car_to_delete:
-                print(f"Aucune voiture trouvée avec l'ID {car_id} pour la suppression.")
+                print(f"Aucune voiture trouvée avec l'ID SQLite {car_id} pour la suppression.")
                 return None
 
             cursor.execute("DELETE FROM cars WHERE id = ?", (car_id,))
             conn.commit()
             if cursor.rowcount > 0:
-                print(f"Voiture ID {car_id} supprimée.")
-                return car_to_delete  # Retourne les données de la voiture supprimée
-            # Ce cas ne devrait pas arriver si get_car_by_id a trouvé la voiture
+                print(f"Voiture ID SQLite {car_id} supprimée.")
+                return car_to_delete
             return None
         except sqlite3.Error as e:
             print(f"Erreur SQLite lors de la suppression de la voiture ID {car_id}: {e}")
@@ -444,36 +304,24 @@ class SQLiteDataManager:
             conn.close()
 
     def search_cars(self, attribute, value):
-        """Recherche des voitures en fonction d'un attribut et d'une valeur dans SQLite."""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
-        # Valider que l'attribut est une colonne connue pour éviter les injections SQL
-        # et pour s'assurer que la recherche est possible.
-        # Les colonnes valides sont celles définies dans _create_table_if_not_exists
-        # plus 'id' qui est la clé primaire.
         valid_columns = ['id', 'name', 'year', 'selling_price', 'km_driven', 'fuel', 'seller_type', 'transmission', 'owner']
         if attribute not in valid_columns:
-            print(f"L'attribut '{attribute}' n'est pas valide pour la recherche.")
-            return pd.DataFrame() # Retourner un DataFrame vide
+            print(f"L'attribut SQLite '{attribute}' n'est pas valide pour la recherche.")
+            return pd.DataFrame()
 
         try:
-            # Pour SQLite, la recherche de chaînes avec LIKE est plus flexible.
-            # Pour les nombres, une comparaison directe est nécessaire.
-            # Nous devons essayer de convertir la valeur en nombre si l'attribut est numérique.
-            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?" # Utiliser LIKE pour les chaînes
-            search_value = f"%{value}%" # Recherche partielle pour les chaînes
+            query = f"SELECT * FROM cars WHERE {attribute} LIKE ?"
+            search_value = f"%{value}%"
 
-            # Si l'attribut est numérique, tenter une conversion et utiliser une comparaison exacte
-            # Note: Cela suppose que vous connaissez les types de vos colonnes.
-            # Une approche plus robuste vérifierait le type de la colonne dans le schéma de la DB.
             if attribute in ['year', 'selling_price', 'km_driven', 'id']:
                 try:
-                    numeric_value = int(value) # ou float(value) si applicable
+                    numeric_value = int(value)
                     query = f"SELECT * FROM cars WHERE {attribute} = ?"
                     search_value = numeric_value
                 except ValueError:
-                    print(f"La valeur '{value}' doit être un nombre pour l'attribut '{attribute}'.")
+                    print(f"La valeur '{value}' doit être un nombre pour l'attribut SQLite '{attribute}'.")
                     return pd.DataFrame()
             
             cursor.execute(query, (search_value,))
@@ -486,85 +334,60 @@ class SQLiteDataManager:
         finally:
             conn.close()
 
+# Exemple d'utilisation (Dependency Inversion Principle)
+# La logique de haut niveau dépend des abstractions (CarRepository), pas des implémentations concrètes.
+def main_app_logic(repository: CarRepository):
+    print("--- Toutes les voitures ---")
+    all_cars = repository.get_all_cars()
+    print(all_cars.head() if not all_cars.empty else "Aucune voiture trouvée.")
 
-# Pour conserver la compatibilité avec les anciens appels directs ou pour des tests rapides
-# Ces fonctions peuvent être retirées si elles ne sont plus nécessaires.
-_default_manager = DataManager()
+    print("\n--- Création d'une voiture ---")
+    new_car = {
+        'name': 'SuperCar ModelX', 'year': 2024, 'selling_price': 90000,
+        'km_driven': 100, 'fuel': 'Electric', 'seller_type': 'Dealer',
+        'transmission': 'Automatic', 'owner': 'First Owner'
+    }
+    created_car = repository.create_car(new_car)
+    if created_car:
+        print(f"Voiture créée: {created_car}")
+        car_id_to_test = created_car.get('id') if isinstance(repository, SQLiteCarRepository) else len(all_cars) # CSV index vs SQLite ID
+        if car_id_to_test is not None:
+            print(f"\n--- Voiture par ID ({car_id_to_test}) ---")
+            car = repository.get_car_by_id(car_id_to_test)
+            print(car if car else f"Aucune voiture trouvée avec l'ID {car_id_to_test}.")
 
-def load_data():
-    return _default_manager.load_data()
+            print(f"\n--- Mise à jour de la voiture ID ({car_id_to_test}) ---")
+            updated_data = {'selling_price': 85000, 'km_driven': 500}
+            updated_car = repository.update_car(car_id_to_test, updated_data)
+            print(f"Voiture mise à jour: {updated_car}" if updated_car else "Échec de la mise à jour.")
 
-def save_data(df):
-    _default_manager.save_data(df)
+            print(f"\n--- Recherche de voitures (name='SuperCar') ---")
+            found_cars = repository.search_cars('name', 'SuperCar')
+            print(found_cars.head() if not found_cars.empty else "Aucune voiture correspondante.")
 
-def create_car(new_car_data):
-    return _default_manager.create_car(new_car_data)
-
-def get_all_cars():
-    return _default_manager.get_all_cars()
-
-def get_car_by_index(index):
-    return _default_manager.get_car_by_index(index)
-
-def update_car(index, updated_car_data):
-    return _default_manager.update_car(index, updated_car_data)
-
-def delete_car(index):
-    return _default_manager.delete_car(index)
+            # print(f"\n--- Suppression de la voiture ID ({car_id_to_test}) ---")
+            # deleted_car = repository.delete_car(car_id_to_test)
+            # print(f"Voiture supprimée: {deleted_car}" if deleted_car else "Échec de la suppression.")
 
 if __name__ == '__main__':
-    # Exemples d'utilisation avec la classe DataManager
-    manager = DataManager()
-    print("Chargement initial des données...")
-    cars_df = manager.load_data()
-    if not cars_df.empty:
-        print(f"Nombre total de voitures: {len(cars_df)}")
-        print("Premières 5 voitures:")
-        print(cars_df.head())
+    # Utilisation avec CSV
+    print("\n******** UTILISATION AVEC CSV ********")
+    csv_data_source = CsvDataSource()
+    csv_repo = CsvCarRepository(csv_data_source)
+    main_app_logic(csv_repo)
 
-        # # Exemple d'ajout
-        # print("\nAjout d'une nouvelle voiture...")
-        # nouvelle_voiture = {
-        # 'name': 'Test Car Class',
-        # 'year': 2024,
-        # 'selling_price': 120000,
-        # 'km_driven': 50,
-        # 'fuel': 'Electric',
-        # 'seller_type': 'Dealer',
-        # 'transmission': 'Automatic',
-        # 'owner': 'First Owner'
-        # }
-        # added_car = manager.create_car(nouvelle_voiture)
-        # if added_car:
-        #     print("Voiture ajoutée:", added_car)
-        # print(manager.get_all_cars().tail(1))
+    # Utilisation avec SQLite
+    print("\n******** UTILISATION AVEC SQLITE ********")
+    sqlite_repo = SQLiteCarRepository()
+    main_app_logic(sqlite_repo)
 
-        # # Exemple de lecture par index
-        # print("\nLecture de la voiture à l'index 0...")
-        # car = manager.get_car_by_index(0)
-        # if car: print(car)
-        # else: print("Voiture non trouvée.")
-
-        # # Exemple de mise à jour
-        # print("\nMise à jour de la voiture à l'index 0...")
-        # updated_details = {'selling_price': 70000, 'km_driven': 80000}
-        # updated_car = manager.update_car(0, updated_details)
-        # if updated_car: print(updated_car)
-        # else: print("Mise à jour échouée ou voiture non trouvée.")
-        # car = manager.get_car_by_index(0)
-        # if car: print(car)
-        # else: print("Voiture non trouvée.")
-
-        # # Exemple de suppression
-        # print("\nSuppression de la voiture à l'index (nouveau) 0...")
-        # # Assurez-vous que l'index est valide après d'éventuelles modifications
-        # current_cars = manager.get_all_cars()
-        # if not current_cars.empty:
-        #     deleted_car = manager.delete_car(0)
-        #     if deleted_car: print("Voiture supprimée:", deleted_car)
-        #     else: print("Suppression échouée ou voiture non trouvée.")
-        #     print(manager.get_all_cars().head())
-        # else:
-        #     print("Aucune voiture à supprimer.")
-    else:
-        print("Impossible de charger les données pour les exemples.")
+    # Nettoyage optionnel des fichiers de données de test
+    # try:
+    #     if os.path.exists(csv_data_source.file_path):
+    #         os.remove(csv_data_source.file_path)
+    #         print(f"Fichier CSV de test supprimé: {csv_data_source.file_path}")
+    #     if os.path.exists(sqlite_repo.db_file_path):
+    #         os.remove(sqlite_repo.db_file_path)
+    #         print(f"Fichier SQLite de test supprimé: {sqlite_repo.db_file_path}")
+    # except Exception as e:
+    #     print(f"Erreur lors du nettoyage des fichiers de test: {e}")

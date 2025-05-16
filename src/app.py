@@ -1,4 +1,4 @@
-from data_manager import DataManager, SQLiteDataManager
+from data_manager import CsvDataSource, CsvCarRepository, SQLiteCarRepository
 
 # Initialiser le gestionnaire de données - Sera fait dans main()
 # data_manager = DataManager()
@@ -78,12 +78,13 @@ def main():
     while True:
         source_choice = input("Choisir la source de données (1: CSV, 2: SQLite, 0: Quitter): ").strip()
         if source_choice == '1':
-            data_manager = DataManager()
+            csv_data_source = CsvDataSource()
+            data_manager = CsvCarRepository(csv_data_source)
             source_type_label = "index"
             print("Source de données sélectionnée: CSV")
             break
         elif source_choice == '2':
-            data_manager = SQLiteDataManager()
+            data_manager = SQLiteCarRepository()
             source_type_label = "ID"
             print("Source de données sélectionnée: SQLite")
             # S'assurer que la table est créée si elle n'existe pas (déjà géré dans __init__ de SQLiteDataManager)
@@ -125,7 +126,7 @@ def main():
                     else: # CSV utilise l'index
                         index_max = len(cars_df) - 1
                         entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à afficher (0-{index_max}): "))
-                        car = data_manager.get_car_by_index(entity_id)
+                        car = data_manager.get_car_by_id(entity_id)
                     
                     if car:
                         print("\n--- Détails de la voiture ---")
@@ -164,7 +165,7 @@ def main():
                     else: # CSV utilise l'index
                         index_max = len(cars_df) - 1
                         entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à mettre à jour (0-{index_max}): "))
-                        car_to_update = data_manager.get_car_by_index(entity_id)
+                        car_to_update = data_manager.get_car_by_id(entity_id)
 
                     if car_to_update:
                         print(f"\nMise à jour de la voiture à l'{source_type_label} {entity_id}:")
