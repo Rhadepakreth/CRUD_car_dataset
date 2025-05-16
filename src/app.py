@@ -192,32 +192,35 @@ def search_cars_route():
 
 
 # Configuration initiale de la source de données (appelée avant de démarrer l'app)
-def configure_data_source():
+# Supprimer la fonction configure_data_source existante et remplacer par :
+@app.before_request
+def check_data_source():
+    global data_manager
+    if not data_manager and request.endpoint != 'configure_source':
+        return redirect(url_for('configure_source'))
+
+@app.route('/configure-source', methods=['GET', 'POST'])
+def configure_source():
     global data_manager, source_type_label
-    while True:
-        print("\n--- Configuration de la Source de Données pour l'Application Web ---")
-        source_choice = input("Choisir la source de données (1: CSV, 2: SQLite, 0: Quitter la configuration): ").strip()
+    
+    if request.method == 'POST':
+        source_choice = request.form.get('source_choice')
         if source_choice == '1':
             csv_data_source = CsvDataSource()
             data_manager = CsvCarRepository(csv_data_source)
             source_type_label = "index"
-            print("Source de données pour l'application web sélectionnée: CSV")
-            break
+            flash("Source de données configurée : CSV", "success")
         elif source_choice == '2':
             data_manager = SQLiteCarRepository()
             source_type_label = "ID"
-            print("Source de données pour l'application web sélectionnée: SQLite")
-            break
-        elif source_choice == '0':
-            print("Configuration annulée. L'application web ne démarrera pas sans source de données.")
-            data_manager = None # S'assurer que data_manager est None si l'utilisateur quitte
-            return False # Indiquer que la configuration a échoué ou a été annulée
+            flash("Source de données configurée : SQLite", "success")
         else:
-            print("Choix de source invalide. Veuillez réessayer.")
-    return True # Indiquer que la configuration est réussie
+            flash("Sélection invalide", "error")
+            return redirect(url_for('configure_source'))
+        
+        return redirect(url_for('index'))
+    
+    return render_template('config_modal.html')
 
 if __name__ == '__main__':
-    if configure_data_source(): # Demander à l'utilisateur de configurer la source de données
-        app.run(debug=True) # Lancer l'application Flask
-    else:
-        print("L'application web n'a pas pu démarrer car la source de données n'a pas été configurée.")
+    app.run(debug=True)  # Supprimer l'appel à configure_data_source()

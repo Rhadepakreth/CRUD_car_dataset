@@ -11,7 +11,8 @@
         body { padding-top: 5rem; }
         .flash-messages .alert { margin-bottom: 1rem; }
         .btn-squared { width: 2rem; height: 2rem; font-size: 0.9rem; margin: 0; }
-        
+        .modal-backdrop.show { opacity: 0.8 !important; }
+        .modal { background: rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
@@ -31,6 +32,13 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('search_cars_route') }}"><i class="fas fa-search"></i> Rechercher</a>
+                </li>
+            </ul>
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('configure_source') }}">
+                        <i class="fas fa-cog"></i> Source de données
+                    </a>
                 </li>
             </ul>
         </div>

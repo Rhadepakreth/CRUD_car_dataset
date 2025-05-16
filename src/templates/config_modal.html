@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="modal fade show" id="configModal" tabindex="-1" aria-labelledby="configModalLabel" style="display: block;">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="configModalLabel">Configuration de la source de données</h5>
+            </div>
+            <form method="POST" action="{{ url_for('configure_source') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Choisir la source de données :</label>
+                        <select class="form-select" name="source_choice" required>
+                            <option value="">-- Sélectionner --</option>
+                            <option value="1">Fichier CSV</option>
+                            <option value="2">Base de données SQLite</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-dark">Confirmer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
