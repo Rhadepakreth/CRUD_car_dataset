@@ -4,7 +4,7 @@
     {% if is_search_results %}
         Résultats de la Recherche
     {% else %}
-        Liste des Voitures
+        Liste de véhicules
     {% endif %}
 {% endblock %}
 
@@ -14,11 +14,11 @@
             {% if is_search_results %}
                 Résultats de la Recherche
             {% else %}
-                Liste des Véhicules stockés
+                Liste de véhicules
             {% endif %}
             <small class="text-muted"> (Source: {{ source_type_label }})</small>
         </h1>
-        <a href="{{ url_for('add_car') }}" class="btn btn-success">Ajouter une Voiture</a>
+        <a href="{{ url_for('add_car') }}" class="btn btn-success"><i class="fas fa-plus"></i> Ajouter</a>
     </div>
 
     {% if cars %}
@@ -26,16 +26,16 @@
             <thead>
                 <tr>
                     {% if source_type_label == 'index' %}
-                        <th>Index (ID CSV)</th>
+                        <th>Index/ID</th>
                     {% else %}
-                        <th>ID SQLite</th>
+                        <th>ID</th>
                     {% endif %}
                     <th>Nom</th>
                     <th>Année</th>
-                    <th>Prix de Vente</th>
-                    <th>Km Parcourus</th>
+                    <th>Prix</th>
+                    <th>Km</th>
                     <th>Carburant</th>
-                    <th>Type Vendeur</th>
+                    <th>Vendeur</th>
                     <th>Transmission</th>
                     <th>Propriétaire</th>
                     <th>Actions</th>
@@ -43,7 +43,7 @@
             </thead>
             <tbody>
                 {% for car in cars %}
-                    <tr>
+                    <tr style="cursor: pointer;" onclick="window.location.href='{{ url_for('car_detail', car_id_str=car.display_id|string) }}'">
                         <td>{{ car.display_id }}</td>
                         <td>{{ car.name }}</td>
                         <td>{{ car.year }}</td>
@@ -53,12 +53,17 @@
                         <td>{{ car.seller_type }}</td>
                         <td>{{ car.transmission }}</td>
                         <td>{{ car.owner }}</td>
-                        <td>
-                            <a href="{{ url_for('car_detail', car_id_str=car.display_id) }}" class="btn btn-info btn-sm">Voir</a>
-                            <a href="{{ url_for('update_car', car_id_str=car.display_id) }}" class="btn btn-warning btn-sm">Modifier</a>
-                            <form action="{{ url_for('delete_car', car_id_str=car.display_id) }}" method="POST" style="display:inline;">
-                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette voiture ?');">Supprimer</button>
-                            </form>
+                        <td onclick="event.stopPropagation();">
+                            <div class="d-flex justify-content-end gap-2">
+                                <a href="{{ url_for('update_car', car_id_str=car.display_id) }}" class="btn btn-warning btn-sm btn-squared me-2" title="Modifier">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form action="{{ url_for('delete_car', car_id_str=car.display_id) }}" method="POST" style="display:inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm btn-squared" title="Supprimer" onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette voiture ?');">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 {% endfor %}

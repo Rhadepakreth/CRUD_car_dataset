@@ -5,9 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>{% block title %}Gestionnaire de Voitures{% endblock %}</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
+        * { border-radius: 0 !important; }
         body { padding-top: 5rem; }
         .flash-messages .alert { margin-bottom: 1rem; }
+        .btn-squared { width: 2rem; height: 2rem; font-size: 0.9rem; margin: 0; }
+        
     </style>
 </head>
 <body>
@@ -20,13 +24,13 @@
         <div class="collapse navbar-collapse" id="navbarsExampleDefault">
             <ul class="navbar-nav mr-auto">
                 <li class="nav-item active">
-                    <a class="nav-link" href="{{ url_for('index') }}">Accueil <span class="sr-only">(current)</span></a>
+                    <a class="nav-link" href="{{ url_for('index') }}"><i class="fas fa-home"></i> Accueil <span class="sr-only">(current)</span></a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('add_car') }}">Ajouter Voiture</a>
+                    <a class="nav-link" href="{{ url_for('add_car') }}"><i class="fas fa-plus-circle"></i> Ajouter Voiture</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('search_cars_route') }}">Rechercher</a>
+                    <a class="nav-link" href="{{ url_for('search_cars_route') }}"><i class="fas fa-search"></i> Rechercher</a>
                 </li>
             </ul>
         </div>

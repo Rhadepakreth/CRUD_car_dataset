@@ -33,8 +33,10 @@
             </div>
         {% endfor %}
         
-        <button type="submit" class="btn btn-primary">{% if action == 'add' %}Ajouter{% else %}Mettre à jour{% endif %}</button>
-        <a href="{{ url_for('index') }}" class="btn btn-secondary">Annuler</a>
+        <button type="submit" class="btn btn-primary">
+            {% if action == 'add' %}<i class="fas fa-plus"></i> Ajouter{% else %}<i class="fas fa-save"></i> Mettre à jour{% endif %}
+        </button>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Annuler</a>
     </form>
     {% if action == 'add' %}
     <p class="mt-2"><small><span class="text-danger">*</span> Champs obligatoires</small></p>
