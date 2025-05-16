@@ -1,13 +1,21 @@
-import data_manager
+from data_manager import DataManager, SQLiteDataManager
+
+# Initialiser le gestionnaire de données - Sera fait dans main()
+# data_manager = DataManager()
+global data_manager # Déclarer data_manager comme global pour y accéder dans les fonctions si nécessaire
+data_manager = None
+global source_type_label
+source_type_label = "index" # Par défaut à index pour CSV
 
 def print_menu():
     """Affiche le menu des options CRUD."""
+    global source_type_label
     print("\n--- Menu CRUD Voitures ---")
     print("1. Lister toutes les voitures")
-    print("2. Afficher une voiture (par index)")
+    print(f"2. Afficher une voiture (par {source_type_label})")
     print("3. Ajouter une nouvelle voiture")
-    print("4. Mettre à jour une voiture (par index)")
-    print("5. Supprimer une voiture (par index)")
+    print(f"4. Mettre à jour une voiture (par {source_type_label})")
+    print(f"5. Supprimer une voiture (par {source_type_label})")
     print("0. Quitter")
 
 def get_car_details_from_user(is_update=False):
@@ -63,8 +71,37 @@ def get_car_details_from_user(is_update=False):
 
 def main():
     """Fonction principale de l'application CLI."""
+    global data_manager
+    global source_type_label
+
+    while True:
+        source_choice = input("Choisir la source de données (1: CSV, 2: SQLite, 0: Quitter): ").strip()
+        if source_choice == '1':
+            data_manager = DataManager()
+            source_type_label = "index"
+            print("Source de données sélectionnée: CSV")
+            break
+        elif source_choice == '2':
+            data_manager = SQLiteDataManager()
+            source_type_label = "ID"
+            print("Source de données sélectionnée: SQLite")
+            # S'assurer que la table est créée si elle n'existe pas (déjà géré dans __init__ de SQLiteDataManager)
+            # data_manager._create_table_if_not_exists() # Appel explicite si nécessaire
+            break
+        elif source_choice == '0':
+            print("Au revoir !")
+            return
+        else:
+            print("Choix de source invalide. Veuillez réessayer.")
+
     while True:
         print_menu()
+        # Afficher le nombre actuel de voitures pour aider l'utilisateur
+        all_cars_df = data_manager.get_all_cars()
+        if not all_cars_df.empty:
+            print(f"(Nombre actuel de voitures: {len(all_cars_df)})")
+        else:
+            print("(Aucune voiture dans la base de données pour le moment)")
         choice = input("Entrez votre choix: ")
 
         if choice == '1': # Lister toutes les voitures
@@ -76,15 +113,34 @@ def main():
                 print("Aucune voiture dans la base de données.")
 
         elif choice == '2': # Afficher une voiture par index
-            try:
-                index = int(input("Entrez l'index de la voiture à afficher: "))
-                car = data_manager.get_car_by_index(index)
-                if car:
-                    print("\n--- Détails de la voiture ---")
-                    for key, value in car.items():
-                        print(f"{key.replace('_', ' ').capitalize()}: {value}")
-            except ValueError:
-                print("Index invalide. Veuillez entrer un nombre.")
+            cars_df = data_manager.get_all_cars()
+            if cars_df.empty:
+                print("Aucune voiture à afficher.")
+            else:
+                try:
+                    if source_type_label == "ID":
+                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à afficher: "))
+                        car = data_manager.get_car_by_id(entity_id)
+                    else: # CSV utilise l'index
+                        index_max = len(cars_df) - 1
+                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à afficher (0-{index_max}): "))
+                        car = data_manager.get_car_by_index(entity_id)
+                    
+                    if car:
+                        print("\n--- Détails de la voiture ---")
+                        # Pour SQLite, l'ID est une colonne, pour CSV, c'est l'index du DataFrame
+                        if source_type_label == "ID" and 'id' in car:
+                            print(f"ID: {car['id']}")
+                        elif source_type_label == "index":
+                             print(f"Index: {entity_id}") # Afficher l'index utilisé pour la recherche CSV
+
+                        for key, value in car.items():
+                            if key == 'id' and source_type_label == "ID": continue # Déjà affiché
+                            print(f"{key.replace('_', ' ').capitalize()}: {value}")
+                    else:
+                        print(f"Aucune voiture trouvée à l'{source_type_label} {entity_id}.")
+                except ValueError:
+                    print(f"{source_type_label} invalide. Veuillez entrer un nombre.")
 
         elif choice == '3': # Ajouter une nouvelle voiture
             new_car_data = get_car_details_from_user()
@@ -96,28 +152,65 @@ def main():
                 print("Données incomplètes. Tous les champs sont requis pour ajouter une voiture.")
 
         elif choice == '4': # Mettre à jour une voiture
-            try:
-                index = int(input("Entrez l'index de la voiture à mettre à jour: "))
-                car_to_update = data_manager.get_car_by_index(index)
-                if car_to_update:
-                    print(f"\nMise à jour de la voiture à l'index {index}:")
-                    for key, value in car_to_update.items():
-                        print(f"{key.replace('_', ' ').capitalize()}: {value}")
-                    updated_data = get_car_details_from_user(is_update=True)
-                    if updated_data: # Si l'utilisateur a fourni des données à mettre à jour
-                        data_manager.update_car(index, updated_data)
+            cars_df = data_manager.get_all_cars()
+            if cars_df.empty:
+                print("Aucune voiture à mettre à jour.")
+            else:
+                try:
+                    if source_type_label == "ID":
+                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à mettre à jour: "))
+                        car_to_update = data_manager.get_car_by_id(entity_id)
+                    else: # CSV utilise l'index
+                        index_max = len(cars_df) - 1
+                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à mettre à jour (0-{index_max}): "))
+                        car_to_update = data_manager.get_car_by_index(entity_id)
+
+                    if car_to_update:
+                        print(f"\nMise à jour de la voiture à l'{source_type_label} {entity_id}:")
+                        if source_type_label == "ID" and 'id' in car_to_update:
+                            print(f"ID: {car_to_update['id']}")
+                        elif source_type_label == "index":
+                             print(f"Index: {entity_id}")
+                        for key, value in car_to_update.items():
+                            if key == 'id' and source_type_label == "ID": continue
+                            print(f"{key.replace('_', ' ').capitalize()}: {value}")
+                        
+                        updated_data = get_car_details_from_user(is_update=True)
+                        if updated_data: # Si l'utilisateur a fourni des données à mettre à jour
+                            if source_type_label == "ID":
+                                data_manager.update_car(entity_id, updated_data)
+                            else:
+                                data_manager.update_car(entity_id, updated_data) # CSV update_car prend aussi l'index
+                        else:
+                            print("Aucune modification fournie.")
                     else:
-                        print("Aucune modification fournie.")
-                # else: get_car_by_index gère déjà le message d'erreur
-            except ValueError:
-                print("Index invalide. Veuillez entrer un nombre.")
+                        print(f"Aucune voiture trouvée à l'{source_type_label} {entity_id} pour la mise à jour.")
+                except ValueError:
+                    print(f"{source_type_label} invalide. Veuillez entrer un nombre.")
 
         elif choice == '5': # Supprimer une voiture
-            try:
-                index = int(input("Entrez l'index de la voiture à supprimer: "))
-                data_manager.delete_car(index)
-            except ValueError:
-                print("Index invalide. Veuillez entrer un nombre.")
+            cars_df = data_manager.get_all_cars()
+            if cars_df.empty:
+                print("Aucune voiture à supprimer.")
+            else:
+                try:
+                    if source_type_label == "ID":
+                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à supprimer: "))
+                        # Pour SQLite, delete_car attend un ID
+                        deleted_car = data_manager.delete_car(entity_id)
+                    else: # CSV utilise l'index
+                        index_max = len(cars_df) - 1
+                        entity_id = int(input(f"Entrez l'{source_type_label} de la voiture à supprimer (0-{index_max}): "))
+                        deleted_car = data_manager.delete_car(entity_id)
+
+                    if deleted_car:
+                        print(f"Voiture à l'{source_type_label} {entity_id} supprimée.")
+                    else:
+                        # Le message d'erreur spécifique est généralement géré dans le DataManager
+                        # Mais on peut ajouter un message générique ici si delete_car retourne None sans imprimer
+                        print(f"Aucune voiture trouvée à l'{source_type_label} {entity_id} pour la suppression ou la suppression a échoué.")
+                except ValueError:
+                    print(f"{source_type_label} invalide. Veuillez entrer un nombre.")
 
         elif choice == '0': # Quitter
             print("Au revoir !")
