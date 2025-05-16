@@ -33,7 +33,7 @@
             </div>
         {% endfor %}
         
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-dark">
             {% if action == 'add' %}<i class="fas fa-plus"></i> Ajouter{% else %}<i class="fas fa-save"></i> Mettre à jour{% endif %}
         </button>
         <a href="{{ url_for('index') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Annuler</a>

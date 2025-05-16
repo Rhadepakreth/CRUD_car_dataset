@@ -24,6 +24,6 @@
     {% else %}
         <p>Voiture non trouvée.</p>
     {% endif %}
-    <a href="{{ url_for('index') }}" class="btn btn-primary">Retour à la liste</a>
+    <a href="{{ url_for('index') }}" class="btn btn-dark">Retour à la liste</a>
     <a href="{{ url_for('update_car', car_id_str=car_id) }}" class="btn btn-warning">Modifier</a>
 {% endblock %}

@@ -18,7 +18,7 @@
             {% endif %}
             <small class="text-muted"> (Source: {{ source_type_label }})</small>
         </h1>
-        <a href="{{ url_for('add_car') }}" class="btn btn-success"><i class="fas fa-plus"></i> Ajouter</a>
+        <a href="{{ url_for('add_car') }}" class="btn btn-dark"><i class="fas fa-plus"></i> Ajouter</a>
     </div>
 
     {% if cars %}
@@ -73,6 +73,6 @@
         <p>Aucune voiture à afficher.</p>
     {% endif %}
     {% if is_search_results %}
-        <a href="{{ url_for('index') }}" class="btn btn-primary mt-3">Retour à la liste complète</a>
+        <a href="{{ url_for('index') }}" class="btn btn-dark mt-3">Retour à la liste complète</a>
     {% endif %}
 {% endblock %}
